@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PosRouteImport } from './routes/pos'
+import { Route as ProductsRouteImport } from './routes/products'
 import { Route as ReturnsRouteImport } from './routes/returns'
 import { Route as SalesRouteImport } from './routes/sales'
 
@@ -30,6 +31,11 @@ const PosRoute = PosRouteImport.update({
   path: '/pos',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProductsRoute = ProductsRouteImport.update({
+  id: '/products',
+  path: '/products',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ReturnsRoute = ReturnsRouteImport.update({
   id: '/returns',
   path: '/returns',
@@ -45,6 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/pos': typeof PosRoute
+  '/products': typeof ProductsRoute
   '/returns': typeof ReturnsRoute
   '/sales': typeof SalesRoute
 }
@@ -52,6 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/pos': typeof PosRoute
+  '/products': typeof ProductsRoute
   '/returns': typeof ReturnsRoute
   '/sales': typeof SalesRoute
 }
@@ -60,21 +68,23 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/pos': typeof PosRoute
+  '/products': typeof ProductsRoute
   '/returns': typeof ReturnsRoute
   '/sales': typeof SalesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/pos' | '/returns' | '/sales'
+  fullPaths: '/' | '/login' | '/pos' | '/products' | '/returns' | '/sales'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/pos' | '/returns' | '/sales'
-  id: '__root__' | '/' | '/login' | '/pos' | '/returns' | '/sales'
+  to: '/' | '/login' | '/pos' | '/products' | '/returns' | '/sales'
+  id: '__root__' | '/' | '/login' | '/pos' | '/products' | '/returns' | '/sales'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LoginRoute: typeof LoginRoute
   PosRoute: typeof PosRoute
+  ProductsRoute: typeof ProductsRoute
   ReturnsRoute: typeof ReturnsRoute
   SalesRoute: typeof SalesRoute
 }
@@ -102,6 +112,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PosRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/products': {
+      id: '/products'
+      path: '/products'
+      fullPath: '/products'
+      preLoaderRoute: typeof ProductsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/returns': {
       id: '/returns'
       path: '/returns'
@@ -123,6 +140,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
   PosRoute: PosRoute,
+  ProductsRoute: ProductsRoute,
   ReturnsRoute: ReturnsRoute,
   SalesRoute: SalesRoute,
 }
