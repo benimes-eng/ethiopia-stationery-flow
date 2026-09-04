@@ -780,7 +780,8 @@ export function buildDatabase(): Database {
     createdAt: iso(int(0, 12), int(8, 18), int(0, 59)),
   }));
 
-  const notifications: Notification[] = [
+  const notifications: Notification[] = (
+    [
     {
       kind: "low_stock",
       title: "23 products below reorder level",
@@ -811,7 +812,8 @@ export function buildDatabase(): Database {
       title: "Fiscal integration not configured",
       body: "Ethiopian e-invoicing adapter is available for a future release.",
     },
-  ].map((n, i) => ({
+    ] satisfies Array<Pick<Notification, "kind" | "title" | "body">>
+  ).map((n, i) => ({
     id: `ntf-${i + 1}`,
     tenantId: TENANT,
     ...n,

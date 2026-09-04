@@ -14,6 +14,7 @@ import type {
   ID,
   Product,
   Supplier,
+  Tenant,
   User,
 } from "@/domain/types";
 
