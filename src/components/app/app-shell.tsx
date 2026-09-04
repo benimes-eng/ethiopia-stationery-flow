@@ -10,8 +10,8 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  CommandDialog,
 } from "@/components/ui/command";
-import { Dialog, CommandDialogContent } from "@/components/app/command-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,7 +29,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { useSession } from "@/hooks/use-session";
 import { useSessionStore } from "@/stores/session-store";
 import { catalogService } from "@/services/catalog.service";
@@ -273,10 +272,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
       </div>
 
-      <Dialog open={paletteOpen} onOpenChange={setPaletteOpen}>
-        <CommandDialogContent>
-          <Command>
-            <CommandInput placeholder="Search screens…" />
+      <CommandDialog open={paletteOpen} onOpenChange={setPaletteOpen}>
+          <CommandInput placeholder="Search screens…" />
             <CommandList>
               <CommandEmpty>No screen matches your search.</CommandEmpty>
               {groups.map((group) => (
@@ -297,11 +294,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                   ))}
                 </CommandGroup>
               ))}
-            </CommandList>
-          </Command>
-          <Separator />
-        </CommandDialogContent>
-      </Dialog>
+          </CommandList>
+      </CommandDialog>
     </div>
   );
 }
