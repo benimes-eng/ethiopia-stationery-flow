@@ -198,7 +198,7 @@ function Dashboard() {
                 <Line
                   type="monotone"
                   dataKey="total"
-                  stroke="hsl(var(--primary))"
+                  stroke="var(--chart-1)"
                   strokeWidth={2}
                   dot={false}
                 />
@@ -223,7 +223,7 @@ function Dashboard() {
                   width={60}
                 />
                 <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                <Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="total" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
