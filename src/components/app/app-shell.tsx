@@ -4,13 +4,12 @@ import { Bell, Building, LogOut, Menu, Search, User as UserIcon, X } from "lucid
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Command,
+  CommandDialog,
   CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
   CommandList,
-  CommandDialog,
 } from "@/components/ui/command";
 import {
   DropdownMenu,
