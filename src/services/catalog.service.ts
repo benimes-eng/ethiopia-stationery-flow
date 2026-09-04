@@ -267,7 +267,7 @@ export const catalogService = {
   tenant() {
     return db().tenants[0]!;
   },
-  async updateTenant(patch: Partial<ReturnType<typeof catalogService.tenant>>) {
+  async updateTenant(patch: Partial<Tenant>) {
     Object.assign(db().tenants[0]!, patch);
     return delay(db().tenants[0]!);
   },
