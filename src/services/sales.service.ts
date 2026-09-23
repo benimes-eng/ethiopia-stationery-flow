@@ -1,5 +1,5 @@
 import {
-  ACTIVE_TENANT_ID,
+  getActiveTenantId,
   db,
   delay,
   nextNumber,
@@ -99,7 +99,7 @@ export const salesService = {
 
     const sale: Sale = {
       id: saleId,
-      tenantId: ACTIVE_TENANT_ID,
+      tenantId: getActiveTenantId(),
       number: nextNumber("sale", "S"),
       branchId: input.branchId,
       registerId: input.registerId,
@@ -114,7 +114,7 @@ export const salesService = {
 
     const invoice: Invoice = {
       id: invoiceId,
-      tenantId: ACTIVE_TENANT_ID,
+      tenantId: getActiveTenantId(),
       number: nextNumber("invoice", "INV"),
       customerId: input.customerId,
       branchId: input.branchId,
@@ -127,7 +127,7 @@ export const salesService = {
 
     const payment: Payment = {
       id: uid("pay"),
-      tenantId: ACTIVE_TENANT_ID,
+      tenantId: getActiveTenantId(),
       number: nextNumber("payment", "PMT"),
       invoiceId,
       saleId,
@@ -177,7 +177,7 @@ export const salesService = {
   async holdSale(input: Omit<CheckoutInput, "payment">) {
     const sale: Sale = {
       id: uid("sale"),
-      tenantId: ACTIVE_TENANT_ID,
+      tenantId: getActiveTenantId(),
       number: nextNumber("sale", "H"),
       branchId: input.branchId,
       registerId: input.registerId,
@@ -224,7 +224,7 @@ export const salesService = {
 
     const record: SaleReturn = {
       id: uid("ret"),
-      tenantId: ACTIVE_TENANT_ID,
+      tenantId: getActiveTenantId(),
       number: nextNumber("return", "RTN"),
       saleId: sale.id,
       branchId: sale.branchId,
@@ -291,7 +291,7 @@ export const salesService = {
     const closure: ShiftClosure = {
       ...input,
       id: uid("shift"),
-      tenantId: ACTIVE_TENANT_ID,
+      tenantId: getActiveTenantId(),
       closedAt: new Date().toISOString(),
     };
     db().shifts.unshift(closure);

@@ -53,6 +53,9 @@ export const ALL_PERMISSIONS: Permission[] = [
   "roles.manage",
   "audit.view",
   "settings.manage",
+  "superadmin.view",
+  "orgs.manage",
+  "orgs.approve",
 ];
 
 export const PERMISSION_GROUPS: Array<{ label: string; permissions: Permission[] }> = [
@@ -233,9 +236,15 @@ export const ROLES: Record<RoleKey, Role> = {
     description: "Invoices, payments, expenses and financial reporting.",
     permissions: accountantPermissions,
   },
+  superadmin: {
+    key: "superadmin",
+    name: "Super Admin",
+    description: "Platform administrator — manages all organizations, approvals, and access control.",
+    permissions: ALL_PERMISSIONS,
+  },
 };
 
-export const ROLE_KEYS: RoleKey[] = ["owner", "manager", "cashier", "storekeeper", "accountant"];
+export const ROLE_KEYS: RoleKey[] = ["owner", "manager", "cashier", "storekeeper", "accountant", "superadmin"];
 
 /**
  * Frontend permission check. This only hides/disables UI — the future backend

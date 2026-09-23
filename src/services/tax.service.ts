@@ -1,4 +1,4 @@
-import { ACTIVE_TENANT_ID, db, delay, scoped } from "@/repositories/mock-repository";
+import { getActiveTenantId, db, delay, scoped } from "@/repositories/mock-repository";
 import type { DocumentLine, ID, TaxCategory, TaxConfiguration } from "@/domain/types";
 
 /**
@@ -26,6 +26,9 @@ export interface DocumentTotals {
 }
 
 export const taxService = {
+  categories(): TaxCategory[] {
+    return this.listCategories();
+  },
   listCategories(): TaxCategory[] {
     return scoped(db().taxCategories);
   },
@@ -49,7 +52,7 @@ export const taxService = {
     const created: TaxCategory = {
       ...input,
       id: `tax-${Math.random().toString(36).slice(2, 8)}`,
-      tenantId: ACTIVE_TENANT_ID,
+      tenantId: getActiveTenantId(),
     };
     data.taxCategories.push(created);
     return delay(created);
@@ -59,30 +62,38 @@ export const taxService = {
     if (!category || !category.active) return 0;
     return category.rate;
   },
-  computeLine(line: DocumentLine): LineTotals {
-    const gross = line.quantity * line.unitPrice;
-    const discount = Math.min(line.discount ?? 0, gross);
+  computeLine(line?: Partial<DocumentLine> | null): LineTotals {
+    if (!line) {
+      return { gross: 0, discount: 0, net: 0, taxRate: 0, tax: 0, total: 0 };
+    }
+    const qty = Number(line.quantity) || 0;
+    const price = Number(line.unitPrice) || 0;
+    const gross = qty * price;
+    const discount = Math.min(Number(line.discount) || 0, gross);
     const net = gross - discount;
-    const taxRate = this.rateFor(line.taxCategoryId);
+    const taxRate = line.taxCategoryId ? this.rateFor(line.taxCategoryId) : 0;
     const tax = Math.round(net * taxRate * 100) / 100;
     return { gross, discount, net, taxRate, tax, total: net + tax };
   },
-  computeDocument(lines: DocumentLine[]): DocumentTotals {
+  computeDocument(lines?: DocumentLine[] | null): DocumentTotals {
+    const safeLines = Array.isArray(lines) ? lines : [];
     const categories = db().taxCategories;
     const byCategory = new Map<ID, { base: number; tax: number }>();
     let subtotal = 0;
     let discount = 0;
     let tax = 0;
 
-    for (const line of lines) {
+    for (const line of safeLines) {
       const totals = this.computeLine(line);
       subtotal += totals.gross;
       discount += totals.discount;
       tax += totals.tax;
-      const bucket = byCategory.get(line.taxCategoryId) ?? { base: 0, tax: 0 };
-      bucket.base += totals.net;
-      bucket.tax += totals.tax;
-      byCategory.set(line.taxCategoryId, bucket);
+      if (line?.taxCategoryId) {
+        const bucket = byCategory.get(line.taxCategoryId) ?? { base: 0, tax: 0 };
+        bucket.base += totals.net;
+        bucket.tax += totals.tax;
+        byCategory.set(line.taxCategoryId, bucket);
+      }
     }
 
     const taxable = subtotal - discount;

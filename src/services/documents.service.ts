@@ -1,5 +1,5 @@
 import {
-  ACTIVE_TENANT_ID,
+  getActiveTenantId,
   db,
   delay,
   nextNumber,
@@ -59,7 +59,7 @@ export const documentsService = {
     }
     const created: Quotation = {
       id: uid("quo"),
-      tenantId: ACTIVE_TENANT_ID,
+      tenantId: getActiveTenantId(),
       number: nextNumber("quotation", "QT"),
       customerId: input.customerId,
       branchId: input.branchId,
@@ -98,7 +98,7 @@ export const documentsService = {
 
     const order: SalesOrder = {
       id: uid("so"),
-      tenantId: ACTIVE_TENANT_ID,
+      tenantId: getActiveTenantId(),
       number: nextNumber("salesOrder", "SO"),
       customerId: quotation.customerId,
       branchId: quotation.branchId,
@@ -157,7 +157,7 @@ export const documentsService = {
 
     const invoice: Invoice = {
       id: uid("inv"),
-      tenantId: ACTIVE_TENANT_ID,
+      tenantId: getActiveTenantId(),
       number: nextNumber("invoice", "INV"),
       customerId: order.customerId,
       branchId: order.branchId,

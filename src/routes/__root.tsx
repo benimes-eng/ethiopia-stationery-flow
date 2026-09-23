@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { CLOUD_SYNC_EVENT } from "@/stores/session-store";
 
 function NotFoundComponent() {
   return (
@@ -77,21 +78,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "Stationery Management" },
+      { name: "description", content: "Stationery Management Platform" },
+      { name: "author", content: "Stationery Management" },
+      { property: "og:title", content: "Stationery Management" },
+      { property: "og:description", content: "Stationery Management Platform" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+      { rel: "alternate icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
   }),
   shellComponent: RootShell,
@@ -116,6 +117,21 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  /**
+   * Fix for multi-device cloud sync:
+   * When syncFromCloud() resolves with new data, it dispatches CLOUD_SYNC_EVENT.
+   * We listen here (at the root, where queryClient is available) and invalidate
+   * ALL React Query caches so every component re-fetches from the freshly loaded DB.
+   */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = () => {
+      void queryClient.invalidateQueries();
+    };
+    window.addEventListener(CLOUD_SYNC_EVENT, handler);
+    return () => window.removeEventListener(CLOUD_SYNC_EVENT, handler);
+  }, [queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>

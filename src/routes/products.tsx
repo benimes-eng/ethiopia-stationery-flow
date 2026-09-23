@@ -4,8 +4,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Archive, Loader2, Pencil, Plus, Upload } from "lucide-react";
+import { Archive, Download, FileSpreadsheet, FileText, Loader2, Pencil, Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { exportToCSV } from "@/lib/csv";
 import { AppLayout } from "@/components/app/app-layout";
 import {
   ConfirmDialog,
@@ -73,13 +74,13 @@ type FormValues = z.input<typeof schema>;
 export const Route = createFileRoute("/products")({
   head: () => ({
     meta: [
-      { title: "Product catalog — Abay Stationery Management" },
+      { title: "Product catalog — Stationery Management" },
       {
         name: "description",
         content:
           "Manage stationery products, SKUs, barcodes, retail and wholesale pricing, tax categories and reorder levels across branches.",
       },
-      { property: "og:title", content: "Product catalog — Abay Stationery Management" },
+      { property: "og:title", content: "Product catalog — Stationery Management" },
       {
         property: "og:description",
         content: "Catalog master data with validated CSV import and price controls.",
@@ -253,6 +254,45 @@ function ProductsScreen() {
         description="Catalog master data shared by every branch, register and purchase order."
         actions={
           <>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const all = catalogService.allProducts();
+                const headers = [
+                  "Item Description",
+                  "Measure",
+                  "Quantity",
+                  "Cost Price",
+                  "Unit Price",
+                  "Wholesale Price",
+                  "Category",
+                  "Brand",
+                  "SKU",
+                  "Barcode",
+                ];
+                const rowsData = all.map((p) => {
+                  const qty = inventoryService.quantityAt(p.id, branchId);
+                  const cat = categories.find((c) => c.id === p.categoryId)?.name ?? "";
+                  const br = brands.find((b) => b.id === p.brandId)?.name ?? "";
+                  return [
+                    p.name,
+                    p.unitOfMeasure,
+                    qty,
+                    p.cost,
+                    p.retailPrice,
+                    p.wholesalePrice,
+                    cat,
+                    br,
+                    p.sku,
+                    p.barcode,
+                  ];
+                });
+                exportToCSV(`products_export_${new Date().toISOString().slice(0, 10)}.csv`, headers, rowsData);
+                toast.success(`Exported ${all.length} products to CSV`);
+              }}
+            >
+              <Download className="mr-2 size-4" /> Export CSV
+            </Button>
             {can("products.create") ? (
               <>
                 <Button variant="outline" onClick={() => setImportOpen(true)}>
@@ -323,7 +363,11 @@ function ProductsScreen() {
         product={editing}
       />
 
-      <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
+      <ImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        currentBranchId={branchId}
+      />
 
       <ConfirmDialog
         open={!!archiving}
@@ -590,13 +634,55 @@ function ProductFormDialog({
 function ImportDialog({
   open,
   onOpenChange,
+  currentBranchId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  currentBranchId?: string | null;
 }) {
+  const queryClient = useQueryClient();
   const [text, setText] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
   const parsed = text.trim() ? catalogService.parseProductCsv(text) : [];
   const valid = parsed.filter((row) => row.errors.length === 0);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        setText(content);
+        toast.info(`Loaded file "${file.name}"`);
+      }
+    };
+    reader.readAsText(file);
+    // reset input
+    e.target.value = "";
+  };
+
+  const handleCommitImport = async () => {
+    if (valid.length === 0) {
+      toast.error("No valid products to import");
+      return;
+    }
+    setIsImporting(true);
+    try {
+      const res = await catalogService.commitProductCsvImport(valid, currentBranchId ?? undefined);
+      toast.success(`Successfully imported ${res.importedCount} products into catalog (${res.targetBranchName})`);
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["stock"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["pos-stock"] });
+      onOpenChange(false);
+      setText("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to import products");
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -604,54 +690,136 @@ function ImportDialog({
         <DialogHeader>
           <DialogTitle>Import products from CSV</DialogTitle>
           <DialogDescription>
-            Paste CSV content to validate it. Rows are checked for duplicate SKUs and numeric
-            pricing.
+            Upload a CSV file or paste product rows below to validate and bulk import them directly into your catalog and warehouse stock.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3">
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={() => setText(PRODUCT_CSV_TEMPLATE)}>
-              Load template
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setText("")}>
-              Clear
-            </Button>
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <label>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
+                <Button type="button" variant="secondary" size="sm" asChild className="cursor-pointer">
+                  <span>
+                    <Upload className="mr-2 size-4" /> Upload CSV file
+                  </span>
+                </Button>
+              </label>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const a = document.createElement("a");
+                  a.href = "/sample_products.csv";
+                  a.download = "sample_products.csv";
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  toast.success("Downloaded sample_products.csv");
+                }}
+              >
+                <Download className="mr-2 size-4" /> Download Sample CSV
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setText(PRODUCT_CSV_TEMPLATE)}
+              >
+                Insert sample text
+              </Button>
+              {text.trim() && (
+                <Button type="button" variant="ghost" size="sm" onClick={() => setText("")}>
+                  Clear
+                </Button>
+              )}
+            </div>
           </div>
-          <Textarea
-            rows={8}
-            className="num text-xs"
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            placeholder="name,sku,barcode,cost,retail_price,wholesale_price"
-          />
+
+          <div>
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              CSV Data Content
+            </Label>
+            <Textarea
+              rows={7}
+              className="mt-1 font-mono text-xs"
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              placeholder="Item Description,Measure,Quantity,Cost Price,Unit Price,Wholesale Price,Category,Brand,SKU,Barcode"
+            />
+          </div>
 
           {parsed.length > 0 ? (
-            <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-lg border border-border p-3 text-xs">
-              {parsed.map((row) => (
-                <div key={row.line} className="flex items-start justify-between gap-3">
-                  <span className="num text-muted-foreground">Line {row.line}</span>
-                  <span className="flex-1 truncate">{row.name || "(no name)"}</span>
-                  {row.errors.length === 0 ? (
-                    <StatusBadge status="Approved" />
-                  ) : (
-                    <span className="text-destructive">{row.errors.join(", ")}</span>
-                  )}
-                </div>
-              ))}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs font-medium">
+                <span>Preview: {parsed.length} row(s) detected</span>
+                <span className="text-muted-foreground">
+                  <strong className="text-foreground">{valid.length}</strong> valid /{" "}
+                  <strong className={parsed.length - valid.length > 0 ? "text-destructive" : ""}>
+                    {parsed.length - valid.length}
+                  </strong>{" "}
+                  errors
+                </span>
+              </div>
+              <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-lg border border-border bg-muted/30 p-2 text-xs">
+                {parsed.map((row) => (
+                  <div
+                    key={row.line}
+                    className={`flex items-start justify-between gap-3 rounded p-1.5 ${
+                      row.errors.length === 0 ? "bg-background/80" : "bg-destructive/10 text-destructive"
+                    }`}
+                  >
+                    <span className="num font-mono text-muted-foreground">Line {row.line}</span>
+                    <span className="flex-1 font-medium truncate">
+                      {row.name || "(no name)"}{" "}
+                      <span className="text-muted-foreground font-normal">
+                        ({row.quantity} {row.measure} · Buy: ETB {row.cost} · Sell: ETB {row.retailPrice})
+                      </span>
+                    </span>
+                    {row.errors.length === 0 ? (
+                      <StatusBadge status="In stock" />
+                    ) : (
+                      <span className="text-destructive font-semibold">{row.errors.join(", ")}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
-          ) : null}
-
-          <PlannedFeatureNotice
-            title="Server-side commit"
-            description={`${valid.length} of ${parsed.length} rows are valid. Bulk creation is validated in the browser only; committing an import runs server-side once the backend API is connected.`}
-            status="Pending backend"
-          />
+          ) : (
+            <div className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+              Paste CSV data or click &quot;Upload CSV file&quot; above. You can also download the sample CSV file to see the expected columns and formatting.
+            </div>
+          )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Close
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCommitImport}
+            disabled={valid.length === 0 || isImporting}
+            className="bg-primary text-primary-foreground"
+          >
+            {isImporting ? (
+              <>
+                <Loader2 className="mr-2 size-4 animate-spin" /> Importing...
+              </>
+            ) : (
+              <>
+                <Plus className="mr-2 size-4" /> Import {valid.length} product(s)
+              </>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

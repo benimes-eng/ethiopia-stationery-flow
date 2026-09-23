@@ -25,9 +25,15 @@ export interface Tenant {
   address: string;
   currency: "ETB";
   onboardingComplete: boolean;
+  /** Approval status — new orgs start as "pending" until superadmin approves */
+  plan?: "pending" | "trial" | "active" | "suspended";
+  /** ISO date after which this org's access expires. null = no expiry. */
+  expiresAt?: string | null;
+  /** True once a superadmin has approved this organization */
+  approved?: boolean;
 }
 
-export type RoleKey = "owner" | "manager" | "cashier" | "storekeeper" | "accountant";
+export type RoleKey = "owner" | "manager" | "cashier" | "storekeeper" | "accountant" | "superadmin";
 
 export interface Role {
   key: RoleKey;
@@ -43,6 +49,8 @@ export interface User extends TenantScoped {
   branchId: ID | null;
   status: "active" | "inactive";
   lastActiveAt: string;
+  /** Password for authentication across devices. */
+  password?: string;
   /** Development-only seeded credential. Never used in production. */
   devPassword?: string;
 }
@@ -99,7 +107,10 @@ export type Permission =
   | "users.manage"
   | "roles.manage"
   | "audit.view"
-  | "settings.manage";
+  | "settings.manage"
+  | "superadmin.view"
+  | "orgs.manage"
+  | "orgs.approve";
 
 /* ------------------------------ Locations ------------------------------- */
 

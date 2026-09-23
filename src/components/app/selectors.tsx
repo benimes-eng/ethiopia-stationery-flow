@@ -45,9 +45,10 @@ function Combobox({
   const selected = options.find((o) => o.id === value);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover modal={true} open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          type="button"
           variant="outline"
           role="combobox"
           aria-expanded={open}
@@ -59,7 +60,7 @@ function Combobox({
           <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[320px] p-0" align="start">
+      <PopoverContent className="w-[320px] p-0 z-[70]" align="start">
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList>
@@ -79,7 +80,7 @@ function Combobox({
               {options.map((option) => (
                 <CommandItem
                   key={option.id}
-                  value={`${option.label} ${option.hint ?? ""}`}
+                  value={`${option.label} ${option.hint ?? ""} ${option.id}`}
                   onSelect={() => {
                     onChange(option.id);
                     setOpen(false);
@@ -116,20 +117,18 @@ export function ProductSelector({
   channel?: "retail" | "wholesale";
   className?: string;
 }) {
-  const options = useMemo(
-    () =>
-      catalogService
-        .allProducts()
-        .filter((p) => p.status === "active")
-        .map((p) => ({
-          id: p.id,
-          label: `${p.name} — ${p.sku}`,
-          hint: formatCurrency(channel === "wholesale" ? p.wholesalePrice : p.retailPrice, {
-            symbol: false,
-          }),
-        })),
-    [channel],
-  );
+  const products = catalogService
+    .allProducts()
+    .filter((p) => p.status === "active");
+
+  const options = products.map((p) => ({
+    id: p.id,
+    label: `${p.name} — ${p.sku}`,
+    hint: formatCurrency(channel === "wholesale" ? p.wholesalePrice : p.retailPrice, {
+      symbol: false,
+    }),
+  }));
+
   return (
     <Combobox
       value={value}
@@ -152,26 +151,47 @@ export function CustomerSelector({
   onChange: (value: ID | null) => void;
   className?: string;
 }) {
-  const options = useMemo(
-    () =>
-      catalogService.customers().map((c) => ({
-        id: c.id,
-        label: c.name,
-        hint: c.type,
-      })),
-    [],
-  );
+  const customers = catalogService.customers();
+  const selected = customers.find((c) => c.id === value);
+
   return (
-    <Combobox
-      value={value}
-      onChange={onChange}
-      options={options}
-      placeholder="Walk-in customer"
-      searchPlaceholder="Search customers"
-      emptyLabel="No matching customer."
-      allowClear
-      className={className}
-    />
+    <Select
+      value={value ?? "__walkin__"}
+      onValueChange={(val) => {
+        onChange(val === "__walkin__" ? null : val);
+      }}
+    >
+      <SelectTrigger className={cn("w-full justify-between font-normal", className)}>
+        <SelectValue placeholder="Walk-in customer">
+          {selected ? (
+            <span>
+              {selected.name}
+              {selected.phone ? (
+                <span className="text-xs text-muted-foreground ml-1.5">({selected.phone})</span>
+              ) : null}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">Walk-in customer</span>
+          )}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent className="max-h-[300px] z-[70]">
+        <SelectItem value="__walkin__">
+          <span className="text-muted-foreground">Walk-in customer</span>
+        </SelectItem>
+        {customers.map((c) => (
+          <SelectItem key={c.id} value={c.id}>
+            <span className="font-medium">{c.name}</span>
+            {c.organization ? (
+              <span className="text-xs text-muted-foreground ml-1.5">({c.organization})</span>
+            ) : null}
+            {c.phone ? (
+              <span className="text-xs text-muted-foreground ml-1.5">· {c.phone}</span>
+            ) : null}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -184,20 +204,49 @@ export function SupplierSelector({
   onChange: (value: ID | null) => void;
   className?: string;
 }) {
-  const options = useMemo(
-    () => catalogService.suppliers().map((s) => ({ id: s.id, label: s.name, hint: s.phone })),
-    [],
-  );
+  const suppliers = catalogService.suppliers();
+  const selected = suppliers.find((s) => s.id === value);
+
   return (
-    <Combobox
-      value={value}
-      onChange={onChange}
-      options={options}
-      placeholder="Select a supplier"
-      searchPlaceholder="Search suppliers"
-      emptyLabel="No matching supplier."
-      className={className}
-    />
+    <Select
+      value={value ?? "__none__"}
+      onValueChange={(val) => {
+        onChange(val === "__none__" ? null : val);
+      }}
+    >
+      <SelectTrigger className={cn("w-full justify-between font-normal", className)}>
+        <SelectValue placeholder="Select a supplier">
+          {selected ? (
+            <span>
+              {selected.name}
+              {selected.phone ? (
+                <span className="text-xs text-muted-foreground ml-1.5">({selected.phone})</span>
+              ) : null}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">Select a supplier</span>
+          )}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent className="max-h-[300px] z-[70]">
+        {suppliers.length === 0 ? (
+          <SelectItem value="__none__" disabled>
+            No suppliers available
+          </SelectItem>
+        ) : null}
+        {suppliers.map((s) => (
+          <SelectItem key={s.id} value={s.id}>
+            <span className="font-medium">{s.name}</span>
+            {s.phone ? (
+              <span className="text-xs text-muted-foreground ml-1.5">· {s.phone}</span>
+            ) : null}
+            {s.contactPerson ? (
+              <span className="text-xs text-muted-foreground ml-1.5">({s.contactPerson})</span>
+            ) : null}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 

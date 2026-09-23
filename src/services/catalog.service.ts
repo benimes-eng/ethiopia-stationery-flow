@@ -1,11 +1,13 @@
 import {
-  ACTIVE_TENANT_ID,
+  getActiveTenantId,
   db,
   delay,
+  persistDatabase,
   recordAudit,
   scoped,
   uid,
 } from "@/repositories/mock-repository";
+import { parseCSV } from "@/lib/csv";
 import type {
   Branch,
   Brand,
@@ -15,6 +17,7 @@ import type {
   Product,
   Supplier,
   Tenant,
+  UnitOfMeasure,
   User,
 } from "@/domain/types";
 
@@ -113,17 +116,18 @@ export const catalogService = {
       });
       return delay(existing);
     }
+    const currentTenant = getActiveTenantId();
     const created: Product = {
       ...input,
       conversionRules: [],
       id: uid("prod"),
-      tenantId: ACTIVE_TENANT_ID,
+      tenantId: currentTenant,
     };
     data.products.push(created);
     for (const branch of scoped(data.branches)) {
       data.balances.push({
         id: uid("bal"),
-        tenantId: ACTIVE_TENANT_ID,
+        tenantId: currentTenant,
         productId: created.id,
         locationId: branch.id,
         quantity: 0,
@@ -175,7 +179,7 @@ export const catalogService = {
       if (existing) Object.assign(existing, input);
       return delay(existing!);
     }
-    const created: Branch = { ...input, id: uid("loc"), tenantId: ACTIVE_TENANT_ID };
+    const created: Branch = { ...input, id: uid("loc"), tenantId: getActiveTenantId() };
     data.branches.push(created);
     return delay(created);
   },
@@ -205,7 +209,7 @@ export const catalogService = {
     const created: User = {
       ...input,
       id: uid("user"),
-      tenantId: ACTIVE_TENANT_ID,
+      tenantId: getActiveTenantId(),
       lastActiveAt: new Date().toISOString(),
     };
     data.users.push(created);
@@ -234,13 +238,15 @@ export const catalogService = {
       if (existing) Object.assign(existing, input);
       return delay(existing!);
     }
+    const currentTenant = getActiveTenantId();
     const created: Customer = {
       ...input,
       id: uid("cus"),
-      tenantId: ACTIVE_TENANT_ID,
+      tenantId: currentTenant,
       createdAt: new Date().toISOString(),
     };
     data.customers.push(created);
+    persistDatabase();
     return delay(created);
   },
 
@@ -257,48 +263,307 @@ export const catalogService = {
     if (input.id) {
       const existing = data.suppliers.find((s) => s.id === input.id);
       if (existing) Object.assign(existing, input);
+      persistDatabase();
       return delay(existing!);
     }
-    const created: Supplier = { ...input, id: uid("sup"), tenantId: ACTIVE_TENANT_ID };
+    const created: Supplier = { ...input, id: uid("sup"), tenantId: getActiveTenantId() };
     data.suppliers.push(created);
+    persistDatabase();
     return delay(created);
   },
 
   /* ------------------------------- Tenant ------------------------------- */
   tenant() {
-    return db().tenants[0]!;
+    const current = getActiveTenantId();
+    const found = db().tenants.find((t) => t.id === current);
+    return found || db().tenants[0]!;
   },
   async updateTenant(patch: Partial<Tenant>) {
-    Object.assign(db().tenants[0]!, patch);
-    return delay(db().tenants[0]!);
+    const t = this.tenant();
+    Object.assign(t, patch);
+    return delay(t);
   },
 
   /* ----------------------------- CSV import ----------------------------- */
-  /** Parses and validates a product CSV. Persisting is intentionally opt-in. */
+  /**
+   * Parses and validates a product CSV.
+   * Supports headers:
+   * - name / item description / product / title
+   * - measure / unit / uom
+   * - quantity / qty / stock
+   * - cost / cost price / unit cost
+   * - price / retail / retail price / unit price
+   * - wholesale / wholesale price
+   * - category / category name
+   * - brand / brand name
+   * - sku / code
+   * - barcode
+   */
   parseProductCsv(text: string) {
-    const lines = text.trim().split(/\r?\n/).filter(Boolean);
-    const [, ...rows] = lines;
-    return rows.map((row, index) => {
-      const [name, sku, barcode, cost, retail, wholesale] = row.split(",").map((c) => c?.trim());
+    const rawRows = parseCSV(text);
+    if (rawRows.length < 2) return [];
+
+    const headers = rawRows[0].map((h) => h.toLowerCase().trim().replace(/[\s_-]+/g, ""));
+
+    const findCol = (aliases: string[]) => {
+      for (const alias of aliases) {
+        const cleaned = alias.toLowerCase().replace(/[\s_-]+/g, "");
+        const idx = headers.findIndex((h) => h === cleaned || h.includes(cleaned));
+        if (idx !== -1) return idx;
+      }
+      return -1;
+    };
+
+    const nameIdx = findCol(["itemdescription", "description", "name", "product", "item"]);
+    const measureIdx = findCol(["measure", "unitofmeasure", "uom", "unit"]);
+    const qtyIdx = findCol(["quantity", "qty", "stock", "onhand"]);
+    const costIdx = findCol(["costprice", "cost", "unitcost", "buyprice"]);
+    const retailIdx = findCol(["unitprice", "retailprice", "retail", "price", "saleprice"]);
+    const wholesaleIdx = findCol(["wholesaleprice", "wholesale"]);
+    const categoryIdx = findCol(["category", "categoryname", "cat"]);
+    const brandIdx = findCol(["brand", "brandname"]);
+    const skuIdx = findCol(["sku", "code", "itemcode"]);
+    const barcodeIdx = findCol(["barcode", "upc", "ean"]);
+
+    const existingSkus = new Set(scoped(db().products).map((p) => p.sku.toLowerCase()));
+    const seenSkusInFile = new Set<string>();
+
+    return rawRows.slice(1).map((row, index) => {
+      const getVal = (col: number) => (col >= 0 && col < row.length ? row[col]?.trim() ?? "" : "");
+
+      const name = getVal(nameIdx >= 0 ? nameIdx : 0);
+      let measure = getVal(measureIdx);
+      const qtyStr = getVal(qtyIdx);
+      const costStr = getVal(costIdx);
+      const retailStr = getVal(retailIdx);
+      const wholesaleStr = getVal(wholesaleIdx);
+      const categoryName = getVal(categoryIdx);
+      const brandName = getVal(brandIdx);
+      let sku = getVal(skuIdx);
+      let barcode = getVal(barcodeIdx);
+
       const errors: string[] = [];
-      if (!name) errors.push("Name is required");
-      if (!sku) errors.push("SKU is required");
-      if (sku && scoped(db().products).some((p) => p.sku === sku)) errors.push("SKU already exists");
-      if (Number.isNaN(Number(cost))) errors.push("Cost must be numeric");
-      if (Number.isNaN(Number(retail))) errors.push("Retail price must be numeric");
+
+      if (!name) errors.push("Product name / description is required");
+
+      const cleanNum = (str: string) => Number(str.replace(/,/g, "").trim());
+
+      const qty = qtyStr ? cleanNum(qtyStr) : 0;
+      if (qtyStr && Number.isNaN(qty)) errors.push("Quantity must be numeric");
+
+      const cost = costStr ? cleanNum(costStr) : 0;
+      if (costStr && Number.isNaN(cost)) errors.push("Cost price must be numeric");
+
+      const retailPrice = retailStr ? cleanNum(retailStr) : cost > 0 ? Math.round(cost * 1.3) : 0;
+      if (retailStr && Number.isNaN(retailPrice)) errors.push("Unit price must be numeric");
+
+      const wholesalePrice = wholesaleStr
+        ? cleanNum(wholesaleStr)
+        : retailPrice > 0
+          ? Math.round(retailPrice * 0.88)
+          : cost;
+      if (wholesaleStr && Number.isNaN(wholesalePrice)) errors.push("Wholesale price must be numeric");
+
+      // Normalize UOM
+      const validUnits: UnitOfMeasure[] = ["Piece", "Pack", "Box", "Ream", "Carton", "Set"];
+      const measureUpper = measure.toUpperCase();
+      let matchedUnit: UnitOfMeasure = "Piece";
+      if (measureUpper.includes("PKT") || measureUpper.includes("PACK")) matchedUnit = "Pack";
+      else if (measureUpper.includes("BOX")) matchedUnit = "Box";
+      else if (measureUpper.includes("REEM") || measureUpper.includes("REAM")) matchedUnit = "Ream";
+      else if (measureUpper.includes("CARTON")) matchedUnit = "Carton";
+      else if (measureUpper.includes("SET")) matchedUnit = "Set";
+      else if (measureUpper.includes("PCS") || measureUpper.includes("PIECE")) matchedUnit = "Piece";
+      else {
+        const found = validUnits.find((u) => u.toLowerCase() === measure.toLowerCase());
+        if (found) matchedUnit = found;
+      }
+
+      const lineNum = index + 2;
+      const skuLower = sku.toLowerCase();
+      if (sku) {
+        if (existingSkus.has(skuLower) || seenSkusInFile.has(skuLower)) {
+          errors.push(`SKU '${sku}' already exists`);
+        } else {
+          seenSkusInFile.add(skuLower);
+        }
+      }
+
       return {
-        line: index + 2,
-        name: name ?? "",
-        sku: sku ?? "",
-        barcode: barcode ?? "",
-        cost: Number(cost ?? 0),
-        retailPrice: Number(retail ?? 0),
-        wholesalePrice: Number(wholesale ?? retail ?? 0),
+        line: lineNum,
+        name,
+        measure: matchedUnit,
+        quantity: Math.max(0, qty),
+        cost: Math.max(0, cost),
+        retailPrice: Math.max(0, retailPrice),
+        wholesalePrice: Math.max(0, wholesalePrice),
+        categoryName: categoryName || "Paper & Envelopes",
+        brandName: brandName || "Generic",
+        sku,
+        barcode,
         errors,
       };
+    });
+  },
+
+  /** Bulk commits validated rows into the store and seeds warehouse inventory */
+  async commitProductCsvImport(
+    items: Array<{
+      name: string;
+      measure: UnitOfMeasure;
+      quantity: number;
+      cost: number;
+      retailPrice: number;
+      wholesalePrice: number;
+      categoryName: string;
+      brandName: string;
+      sku?: string;
+      barcode?: string;
+    }>,
+    targetLocationId?: string
+  ) {
+    const data = db();
+    const existingCats = scoped(data.categories);
+    const existingBrands = scoped(data.brands);
+    const pad = (n: number, w = 4) => String(n).padStart(w, "0");
+
+    const activeTenant = getActiveTenantId();
+    let tenantBranches = scoped(data.branches);
+
+    // If no branches exist in this tenant yet, auto-create one
+    if (tenantBranches.length === 0) {
+      const defBranch: Branch = {
+        id: `loc-main-${activeTenant}`,
+        tenantId: activeTenant,
+        name: "Main Branch",
+        code: "HQ-01",
+        kind: "branch",
+        address: "Main Location",
+        phone: "+251 90 000 0000",
+        managerName: "Manager",
+        status: "active",
+      };
+      data.branches.push(defBranch);
+      tenantBranches = [defBranch];
+    }
+
+    // Resolve the actual target branch for inventory balances:
+    // 1. Match specified targetLocationId in tenant's branches
+    // 2. Or prefer warehouse if one exists in this tenant
+    // 3. Or use the first branch in the tenant
+    const targetBranch =
+      (targetLocationId && tenantBranches.find((b) => b.id === targetLocationId)) ||
+      tenantBranches.find((b) => b.kind === "warehouse") ||
+      tenantBranches[0]!;
+    const actualTargetId = targetBranch.id;
+
+    let nextSkuNum = data.products.length + 1;
+    const addedProducts: Product[] = [];
+
+    for (const item of items) {
+      // Find or create category
+      let cat = existingCats.find(
+        (c) => c.name.toLowerCase() === item.categoryName.trim().toLowerCase()
+      );
+      if (!cat) {
+        cat = { id: uid("cat"), tenantId: activeTenant, name: item.categoryName.trim() };
+        data.categories.push(cat);
+        existingCats.push(cat);
+      }
+
+      // Find or create brand
+      let brand = existingBrands.find(
+        (b) => b.name.toLowerCase() === item.brandName.trim().toLowerCase()
+      );
+      if (!brand) {
+        brand = { id: uid("brand"), tenantId: activeTenant, name: item.brandName.trim() };
+        data.brands.push(brand);
+        existingBrands.push(brand);
+      }
+
+      const sku = item.sku?.trim() || `SKU-${pad(nextSkuNum)}`;
+      const barcode = item.barcode?.trim() || `690${pad(nextSkuNum, 9)}`;
+      nextSkuNum++;
+
+      const newProd: Product = {
+        id: uid("prod"),
+        tenantId: activeTenant,
+        sku,
+        name: item.name.trim(),
+        barcode,
+        categoryId: cat.id,
+        brandId: brand.id,
+        description: `Imported ${item.name.trim()}`,
+        unitOfMeasure: item.measure,
+        purchaseUnit: item.measure,
+        salesUnit: item.measure,
+        conversionRules: [],
+        cost: item.cost,
+        retailPrice: item.retailPrice,
+        wholesalePrice: item.wholesalePrice,
+        reorderLevel: 10,
+        taxCategoryId: "tax-vat15",
+        supplierId: null,
+        status: "active",
+      };
+
+      data.products.push(newProd);
+      addedProducts.push(newProd);
+
+      // Create balances across all branches of this tenant
+      const importQty = Math.max(0, Number(item.quantity) || 0);
+      for (const branch of tenantBranches) {
+        const isTarget = branch.id === actualTargetId;
+        const initialQty = isTarget ? importQty : 0;
+        data.balances.push({
+          id: uid("bal"),
+          tenantId: activeTenant,
+          productId: newProd.id,
+          locationId: branch.id,
+          quantity: initialQty,
+          averageCost: item.cost,
+        });
+
+        // Record opening stock in ledger so stock history/reports are accurate
+        if (isTarget && initialQty > 0) {
+          data.ledger.push({
+            id: uid("txn"),
+            tenantId: activeTenant,
+            productId: newProd.id,
+            locationId: branch.id,
+            type: "OPENING",
+            quantity: initialQty,
+            unitCost: item.cost,
+            reference: "CSV/IMPORT",
+            createdAt: new Date().toISOString(),
+            note: "Initial stock from CSV import",
+          });
+        }
+      }
+    }
+
+    recordAudit({
+      userId: "user-owner",
+      action: "Imported products CSV",
+      entity: "Product",
+      entityId: addedProducts[0]?.id ?? "bulk",
+      branchId: actualTargetId,
+      description: `Bulk imported ${addedProducts.length} product(s) into ${targetBranch.name} via CSV.`,
+    });
+
+    persistDatabase();
+    return delay({
+      importedCount: addedProducts.length,
+      products: addedProducts,
+      targetBranchName: targetBranch.name,
     });
   },
 };
 
 export const PRODUCT_CSV_TEMPLATE =
-  "name,sku,barcode,cost,retail_price,wholesale_price\nA4 Copy Paper 80gsm,SKU-2001,6001234567890,620,780,705\n";
+  `Item Description,Measure,Quantity,Cost Price,Unit Price,Wholesale Price,Category,Brand,SKU,Barcode
+A3 POSTA SKY-LINE-BRAND,Piece,1464,12,16,14,Paper & Envelopes,Generic,SKU-SAMPLE-01,690000000001
+BIC ROUND STIC BLACK,Piece,610,18,23,20,Writing Instruments,Bic,SKU-SAMPLE-02,690000000002
+BOX FILE KENT,Piece,338,215,280,246,Filing & Binders,Generic,SKU-SAMPLE-03,690000000003
+CASIO CALCULATOR SMALL SIZE,Piece,36,538,700,616,Office Machines & Electronics,Casio,SKU-SAMPLE-04,690000000004
+`;

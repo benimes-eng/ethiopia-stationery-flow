@@ -1,5 +1,5 @@
 import {
-  ACTIVE_TENANT_ID,
+  getActiveTenantId,
   db,
   delay,
   nextNumber,
@@ -59,7 +59,7 @@ export const purchasingService = {
     }
     const created: PurchaseOrder = {
       id: uid("po"),
-      tenantId: ACTIVE_TENANT_ID,
+      tenantId: getActiveTenantId(),
       number: nextNumber("purchaseOrder", "PO"),
       supplierId: input.supplierId,
       locationId: input.locationId,
@@ -142,7 +142,7 @@ export const purchasingService = {
 
     const receipt: GoodsReceipt = {
       id: uid("grn"),
-      tenantId: ACTIVE_TENANT_ID,
+      tenantId: getActiveTenantId(),
       number: nextNumber("receipt", "GRN"),
       purchaseOrderId: order.id,
       locationId: order.locationId,

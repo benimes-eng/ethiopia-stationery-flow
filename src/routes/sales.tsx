@@ -35,13 +35,13 @@ import type { Sale } from "@/domain/types";
 export const Route = createFileRoute("/sales")({
   head: () => ({
     meta: [
-      { title: "Sales history — Abay Stationery Management" },
+      { title: "Sales history — Stationery Management" },
       {
         name: "description",
         content:
           "Search completed, held and returned sales by branch, review line detail and reprint receipts.",
       },
-      { property: "og:title", content: "Sales history — Abay Stationery Management" },
+      { property: "og:title", content: "Sales history — Stationery Management" },
       {
         property: "og:description",
         content: "Every register transaction with tax totals, cashier and payment detail.",

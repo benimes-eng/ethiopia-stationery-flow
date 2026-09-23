@@ -45,13 +45,13 @@ import { formatCurrency, formatDate, formatPercent, formatQuantity } from "@/lib
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Operations dashboard — Abay Stationery Management" },
+      { title: "Operations dashboard — Stationery Management" },
       {
         name: "description",
         content:
           "Daily sales, gross profit, stock value and reorder alerts across every Abay Stationery branch and warehouse.",
       },
-      { property: "og:title", content: "Operations dashboard — Abay Stationery Management" },
+      { property: "og:title", content: "Operations dashboard — Stationery Management" },
       {
         property: "og:description",
         content: "Live KPIs, sales trends and stock alerts for Ethiopian stationery operations.",

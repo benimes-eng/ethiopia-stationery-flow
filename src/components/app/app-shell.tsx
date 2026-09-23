@@ -71,8 +71,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const sidebar = (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-3 border-b border-sidebar-border px-5 py-4">
-        <span className="flex size-9 items-center justify-center rounded-md bg-primary text-sm font-semibold text-primary-foreground">
-          AS
+        <span className="flex size-9 items-center justify-center rounded-md bg-primary text-base font-bold text-primary-foreground">
+          S
         </span>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{tenant.name}</p>

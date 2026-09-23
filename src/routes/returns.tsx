@@ -49,13 +49,13 @@ const REASONS: ReturnReason[] = [
 export const Route = createFileRoute("/returns")({
   head: () => ({
     meta: [
-      { title: "Sales returns — Abay Stationery Management" },
+      { title: "Sales returns — Stationery Management" },
       {
         name: "description",
         content:
           "Record customer returns against the original sale, choose restock or write-off, and keep an auditable refund trail.",
       },
-      { property: "og:title", content: "Sales returns — Abay Stationery Management" },
+      { property: "og:title", content: "Sales returns — Stationery Management" },
       {
         property: "og:description",
         content: "Return processing with mandatory original sale reference and stock impact.",

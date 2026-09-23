@@ -41,19 +41,20 @@ import { inventoryService } from "@/services/inventory.service";
 import { taxService } from "@/services/tax.service";
 import { ETHIOPIAN_BANKS, salesService, type CheckoutResult } from "@/services/sales.service";
 import { barcodeScannerService, cashDrawerService } from "@/services/hardware.service";
+import { persistDatabase } from "@/repositories/mock-repository";
 import { formatCurrency, formatQuantity } from "@/lib/format";
 import type { DocumentLine, PaymentMethod } from "@/domain/types";
 
 export const Route = createFileRoute("/pos")({
   head: () => ({
     meta: [
-      { title: "Point of sale — Abay Stationery Management" },
+      { title: "Point of sale — Stationery Management" },
       {
         name: "description",
         content:
           "Keyboard-first stationery register with retail and wholesale pricing, barcode scanning, cash and bank settlement, holds and receipt printing.",
       },
-      { property: "og:title", content: "Point of sale — Abay Stationery Management" },
+      { property: "og:title", content: "Point of sale — Stationery Management" },
       {
         property: "og:description",
         content: "Fast register checkout with ETB pricing, tax handling and receipt printing.",
@@ -203,6 +204,8 @@ function Pos() {
       setReference("");
       setNote("");
       clear();
+      // Force immediate persist + cloud push so stock shows updated on all devices
+      persistDatabase();
       await queryClient.invalidateQueries();
       toast.success(`Sale ${result.sale.number} completed`);
     } catch (error) {
@@ -560,33 +563,35 @@ function Pos() {
 
       {/* Receipt */}
       <Dialog open={!!receipt} onOpenChange={(open) => !open && setReceipt(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Sale completed</DialogTitle>
             <DialogDescription>
               {receipt ? `Change due ${formatCurrency(receipt.change)}` : ""}
             </DialogDescription>
           </DialogHeader>
-          {receipt ? (
-            <ReceiptPreview
-              number={receipt.sale.number}
-              createdAt={receipt.sale.createdAt}
-              branchId={receipt.sale.branchId}
-              cashierName={user?.name ?? ""}
-              customerName={
-                catalogService.customers().find((c) => c.id === receipt.sale.customerId)?.name
-              }
-              lines={receipt.sale.lines}
-              payment={{
-                method: receipt.payment.method,
-                amount: receipt.payment.amount,
-                bank: receipt.payment.bank,
-                reference: receipt.payment.reference,
-              }}
-              change={receipt.change}
-            />
-          ) : null}
-          <DialogFooter>
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+            {receipt ? (
+              <ReceiptPreview
+                number={receipt.sale.number}
+                createdAt={receipt.sale.createdAt}
+                branchId={receipt.sale.branchId}
+                cashierName={user?.name ?? ""}
+                customerName={
+                  catalogService.customers().find((c) => c.id === receipt.sale.customerId)?.name
+                }
+                lines={receipt.sale.lines}
+                payment={{
+                  method: receipt.payment.method,
+                  amount: receipt.payment.amount,
+                  bank: receipt.payment.bank,
+                  reference: receipt.payment.reference,
+                }}
+                change={receipt.change}
+              />
+            ) : null}
+          </div>
+          <DialogFooter className="mt-2 shrink-0">
             <Button onClick={() => setReceipt(null)}>New sale</Button>
           </DialogFooter>
         </DialogContent>

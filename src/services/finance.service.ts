@@ -1,5 +1,5 @@
 import {
-  ACTIVE_TENANT_ID,
+  getActiveTenantId,
   db,
   delay,
   nextNumber,
@@ -54,7 +54,7 @@ export const financeService = {
 
     const payment: Payment = {
       id: uid("pay"),
-      tenantId: ACTIVE_TENANT_ID,
+      tenantId: getActiveTenantId(),
       number: nextNumber("payment", "PMT"),
       invoiceId: invoice.id,
       branchId: invoice.branchId,
@@ -94,7 +94,7 @@ export const financeService = {
     return delay([...rows].sort((a, b) => b.date.localeCompare(a.date)));
   },
   async saveExpense(input: Omit<Expense, "id" | "tenantId">) {
-    const created: Expense = { ...input, id: uid("exp"), tenantId: ACTIVE_TENANT_ID };
+    const created: Expense = { ...input, id: uid("exp"), tenantId: getActiveTenantId() };
     db().expenses.unshift(created);
     recordAudit({
       userId: input.recordedBy,

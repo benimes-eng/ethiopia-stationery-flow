@@ -1,5 +1,5 @@
 import {
-  ACTIVE_TENANT_ID,
+  getActiveTenantId,
   db,
   delay,
   nextNumber,
@@ -37,11 +37,12 @@ export interface StockRow {
 
 function balanceOf(productId: ID, locationId: ID): InventoryBalance {
   const data = db();
-  let balance = data.balances.find((b) => b.productId === productId && b.locationId === locationId);
+  const activeTenant = getActiveTenantId();
+  let balance = data.balances.find((b) => b.productId === productId && b.locationId === locationId && b.tenantId === activeTenant);
   if (!balance) {
     balance = {
       id: uid("bal"),
-      tenantId: ACTIVE_TENANT_ID,
+      tenantId: activeTenant,
       productId,
       locationId,
       quantity: 0,
@@ -57,7 +58,7 @@ function post(txn: Omit<InventoryTransaction, "id" | "tenantId" | "createdAt">) 
   const entry: InventoryTransaction = {
     ...txn,
     id: uid("txn"),
-    tenantId: ACTIVE_TENANT_ID,
+    tenantId: getActiveTenantId(),
     createdAt: new Date().toISOString(),
   };
   data.ledger.push(entry);
@@ -182,7 +183,7 @@ export const inventoryService = {
     data.adjustments.unshift({
       ...input,
       id: uid("adj"),
-      tenantId: ACTIVE_TENANT_ID,
+      tenantId: getActiveTenantId(),
       createdAt: new Date().toISOString(),
     });
     recordAudit({
@@ -216,7 +217,7 @@ export const inventoryService = {
   }) {
     const transfer: InventoryTransfer = {
       id: uid("trf"),
-      tenantId: ACTIVE_TENANT_ID,
+      tenantId: getActiveTenantId(),
       reference: nextNumber("transfer", "TRF"),
       fromLocationId: input.fromLocationId,
       toLocationId: input.toLocationId,
@@ -293,7 +294,7 @@ export const inventoryService = {
     const products = scoped(db().products).filter((p) => p.status === "active");
     const count: InventoryCount = {
       id: uid("cnt"),
-      tenantId: ACTIVE_TENANT_ID,
+      tenantId: getActiveTenantId(),
       reference: nextNumber("count", "SC"),
       locationId,
       status: "Counting",
